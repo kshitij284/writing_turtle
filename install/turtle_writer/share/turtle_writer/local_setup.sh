@@ -1,0 +1,1 @@
+/Users/kshitij/Documents/ros2/writing_turtle/build/turtle_writer/ament_cmake_environment_hooks/local_setup.sh
