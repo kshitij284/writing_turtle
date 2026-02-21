@@ -1,9 +1,0 @@
-/Users/kshitij/Documents/ros2/writing_turtle/build/turtle_writer/CMakeFiles/uninstall.dir
-/Users/kshitij/Documents/ros2/writing_turtle/build/turtle_writer/CMakeFiles/turtle_writer_uninstall.dir
-/Users/kshitij/Documents/ros2/writing_turtle/build/turtle_writer/CMakeFiles/test.dir
-/Users/kshitij/Documents/ros2/writing_turtle/build/turtle_writer/CMakeFiles/edit_cache.dir
-/Users/kshitij/Documents/ros2/writing_turtle/build/turtle_writer/CMakeFiles/rebuild_cache.dir
-/Users/kshitij/Documents/ros2/writing_turtle/build/turtle_writer/CMakeFiles/list_install_components.dir
-/Users/kshitij/Documents/ros2/writing_turtle/build/turtle_writer/CMakeFiles/install.dir
-/Users/kshitij/Documents/ros2/writing_turtle/build/turtle_writer/CMakeFiles/install/local.dir
-/Users/kshitij/Documents/ros2/writing_turtle/build/turtle_writer/CMakeFiles/install/strip.dir

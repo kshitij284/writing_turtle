@@ -11,14 +11,15 @@ find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(turtlesim REQUIRED)
 
-add_executable( turtle_writer_node src/turtle_writer_node.cpp
+add_executable( turtle_writer_node src/turtle_writer_node.cpp)
 ament_target_dependencies( turtle_writer_node rclcpp geometry_msgs turtlesim )
 
-install(TARGETS turtlesim_writer_node
+install(TARGETS turtle_writer_node
 DESTINATION lib/${PROJECT_NAME})
 
-install(DIRECTORY launch
-DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY 
+  launch
+DESTINATION share/${PROJECT_NAME})
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

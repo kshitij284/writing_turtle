@@ -1,5 +1,5 @@
 from launch import LaunchDescription
-from launch.action import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -16,7 +16,7 @@ def generate_launch_description():
             name='turtlesim'
         ),
         Node(
-            package='turtlesim_writer',
+            package='turtle_writer',
             executable='turtle_writer_node',
             name='turtle_writer',
             parameters=[{
