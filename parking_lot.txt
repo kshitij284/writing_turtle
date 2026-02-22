@@ -1,0 +1,4 @@
+1. Multithread executor with separate thread for drawing
+2. Implement Graph theory to optimize Letter drawing path ?
+3. Use bit maps to draw picture with turtlu?
+
