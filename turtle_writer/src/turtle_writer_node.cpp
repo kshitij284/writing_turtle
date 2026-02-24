@@ -52,7 +52,8 @@ class TurtleWriterNode : public rclcpp::Node
         while (!pose_received_) {
             rclcpp::sleep_for(std::chrono::milliseconds(50));
         }
-        RCLCPP_INFO(this->get_logger(), "Pose ready: x=%.3f y=%.3f", current_pose_.x, current_pose_.y);
+        RCLCPP_INFO(this->get_logger(), "Pose ready: x=%.3f y=%.3f",
+            current_pose_.x, current_pose_.y);
     }
 
     void move(float distance)
@@ -60,13 +61,13 @@ class TurtleWriterNode : public rclcpp::Node
         float start_x = current_pose_.x;
         float start_y = current_pose_.y;
 
-        cmd_vel_.linear.x = 1.0;
+        cmd_vel_.linear.x = 0.5;
         cmd_vel_.angular.z = 0.0;
 
         while (true)
         {
             publisher_->publish(cmd_vel_);
-            rclcpp::sleep_for(std::chrono::milliseconds(10));
+            rclcpp::sleep_for(std::chrono::milliseconds(5));
 
             float dx = current_pose_.x - start_x;
             float dy = current_pose_.y - start_y;
@@ -85,16 +86,16 @@ class TurtleWriterNode : public rclcpp::Node
         float total_turned = 0.0;
         float prev_theta = current_pose_.theta;
 
-        cmd_vel_.angular.z = angle > 0 ? 1.0 : -1.0;
+        cmd_vel_.angular.z = angle > 0 ? 0.5 : -0.5;
         cmd_vel_.linear.x = 0.0;
 
         float target = std::abs(angle);
-        float buffer = 0.11;
+        float buffer = 0.05;
 
         while (true)
         {
             publisher_->publish(cmd_vel_);
-            rclcpp::sleep_for(std::chrono::milliseconds(10));
+            rclcpp::sleep_for(std::chrono::milliseconds(5));
 
             float current_theta = current_pose_.theta;
             float delta = current_theta - prev_theta;
@@ -139,7 +140,6 @@ class TurtleWriterNode : public rclcpp::Node
 
     void go_to(float x, float y)
     {
-
         float dx = x - current_pose_.x;
         float dy = y - current_pose_.y;
         float distance = std::sqrt(dx*dx + dy*dy);
@@ -148,66 +148,64 @@ class TurtleWriterNode : public rclcpp::Node
         turn_to(angle);
         move(distance);
 
-    }
+        // Correction pass — fix residual error
+        float ex = x - current_pose_.x;
+        float ey = y - current_pose_.y;
+        float error = std::sqrt(ex*ex + ey*ey);
 
-    void draw_H()
-    {
-	float start_x = 2.0;
-	float start_y = 2.0;
-	
-	set_pen(false);	
-	go_to(start_x, start_y);
-        
-	std::vector<std::vector<float>> H = {{2,5,1},{2,3.5,0},{4,3.5,1},{4,5,0},{4,2,1}};
-	
-	for(size_t i = 0; i< H.size() ; i++)
-	{
-	  float x = H[i][0];
-	  float y = H[i][1];
-
-	  float pen = H[i][2];
-	  
-	  if(pen == 1){set_pen(true);}
-	  else{set_pen(false);}
-
-	  	 
-	  float scale = 1.0;
-	  go_to( x*scale, y*scale);
-
-	}
-    }
-
-    void draw_word(const std::string & name, const std::map<char, std::vector<std::vector<float>>> & letters)
-    {
-      float origin_x = 2.0;
-      float origin_y = 2.0;
-
-      set_pen(false);
-      go_to(origin_x, origin_y);
-      float scale = 0.5;
-      for (char c : name)
-      {
-        std::vector<std::vector<float>> character = letters.at(c);
-        for (size_t i = 0; i < character.size(); i++)
-        {
-            float x   = character[i][0];
-            float y   = character[i][1];
-            float pen = character[i][2];
-
-            if (pen == 1) { set_pen(true); }
-            else          { set_pen(false); }
-
-            go_to(origin_x + x * scale, origin_y + y * scale);
+        if (error > 0.02) {
+            float correction_angle = std::atan2(ey, ex);
+            turn_to(correction_angle);
+            move(error);
         }
 
-        float space = scale * 2.5;
-        origin_x += space;
+        RCLCPP_INFO(this->get_logger(),
+            "go_to(%.2f, %.2f) → actual(%.2f, %.2f) error(%.3f, %.3f)",
+            x, y,
+            current_pose_.x, current_pose_.y,
+            current_pose_.x - x,
+            current_pose_.y - y);
+    }
+
+    void draw_word(const std::string & name,
+                   const std::map<char, std::vector<std::vector<float>>> & letters)
+    {
+        float origin_x = 1.5;
+        float origin_y = 2.0;
+        float scale = 0.5;
 
         set_pen(false);
         go_to(origin_x, origin_y);
-      }
-    }
 
+        for (char c : name)
+        {
+            if (letters.find(c) == letters.end()) {
+                RCLCPP_WARN(this->get_logger(), "No definition for letter '%c', skipping", c);
+                origin_x += scale * 2.5;
+                continue;
+            }
+
+            std::vector<std::vector<float>> character = letters.at(c);
+
+            for (size_t i = 0; i < character.size(); i++)
+            {
+                float x   = character[i][0];
+                float y   = character[i][1];
+                float pen = character[i][2];
+
+                if (pen == 1) { set_pen(true); }
+                else          { set_pen(false); }
+
+                go_to(origin_x + x * scale, origin_y + y * scale);
+            }
+
+            float space = scale * 2.5;
+            origin_x += space;
+
+            set_pen(false);
+            go_to(origin_x, origin_y);
+        }
+    }
 };
 
 int main(int argc, char * argv[])
@@ -218,18 +216,18 @@ int main(int argc, char * argv[])
 
     executor->add_node(node);
 
-
-
     std::map<char, std::vector<std::vector<float>>> letters = {
-      {'H', {{0,3,1},{0,1.5,0},{2,1.5,1},{2,3,0},{2,0,1}}},
-      {'E', {{2,0,1},{0,0,0},{0,3,1},{2,3,1},{0,1.5,0},{2,1.5,1}}},
-      {'L', {{2,0,1},{0,0,0},{0,3,1}}},
-      {'O', {{0,3,1},{2,3,1},{2,0,1},{0,0,1},{0,3,1}}}
-      };
-    
+        {'H', {{0,3,1},{0,1.5,0},{2,1.5,1},{2,3,0},{2,0,1}}},
+        {'E', {{0,0,1},{2,0,1},{0,0,0},{0,3,1},{2,3,1},{0,1.5,0},{2,1.5,1}}},
+        {'L', {{0,3,1},{0,0,1},{2,0,1}}},
+        {'O', {{0,3,1},{2,3,1},{2,0,1},{0,0,1},{0,3,1}}},
+        {'I', {{0,0,0},{0,3,1}}}
+    };
+
     std::thread drawing_thread([&node, &letters]() {
         node->wait_for_pose();
-        node->draw_word("HELLO",letters);
+        std::string name = node->get_parameter("name").as_string();
+        node->draw_word(name, letters);
     });
 
     executor->spin();
