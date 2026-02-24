@@ -10,6 +10,7 @@
 #include "geometry_msgs/msg/twist.hpp"
 #include "turtlesim/msg/pose.hpp"
 #include "turtlesim/srv/set_pen.hpp"
+#include "turtlesim/srv/teleport_absolute.hpp"
 
 using namespace std::chrono_literals;
 
@@ -19,6 +20,7 @@ class TurtleWriterNode : public rclcpp::Node
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr publisher_;
     rclcpp::Subscription<turtlesim::msg::Pose>::SharedPtr subscription_;
     rclcpp::Client<turtlesim::srv::SetPen>::SharedPtr client_;
+    rclcpp::Client<turtlesim::srv::TeleportAbsolute>::SharedPtr teleport_client_;
     turtlesim::msg::Pose current_pose_;
     geometry_msgs::msg::Twist cmd_vel_;
     bool pose_received_ = false;
@@ -41,9 +43,13 @@ class TurtleWriterNode : public rclcpp::Node
             "/turtle1/pose", 10,
             std::bind(&TurtleWriterNode::sub_callback, this, std::placeholders::_1));
         client_ = this->create_client<turtlesim::srv::SetPen>("/turtle1/set_pen");
+        teleport_client_ = this->create_client<turtlesim::srv::TeleportAbsolute>("/turtle1/teleport_absolute");
 
         while (!client_->wait_for_service(1s)) {
             RCLCPP_INFO(this->get_logger(), "Waiting for set_pen service...");
+        }
+        while (!teleport_client_->wait_for_service(1s)) {
+            RCLCPP_INFO(this->get_logger(), "Waiting for teleport service...");
         }
     }
 
@@ -61,7 +67,7 @@ class TurtleWriterNode : public rclcpp::Node
         float start_x = current_pose_.x;
         float start_y = current_pose_.y;
 
-        cmd_vel_.linear.x = 0.5;
+        cmd_vel_.linear.x = 2.0;
         cmd_vel_.angular.z = 0.0;
 
         while (true)
@@ -86,11 +92,11 @@ class TurtleWriterNode : public rclcpp::Node
         float total_turned = 0.0;
         float prev_theta = current_pose_.theta;
 
-        cmd_vel_.angular.z = angle > 0 ? 0.5 : -0.5;
+        cmd_vel_.angular.z = angle > 0 ? 1.0 : -1.0;
         cmd_vel_.linear.x = 0.0;
 
         float target = std::abs(angle);
-        float buffer = 0.05;
+        float buffer = 0.08;
 
         while (true)
         {
@@ -138,7 +144,24 @@ class TurtleWriterNode : public rclcpp::Node
         rclcpp::sleep_for(std::chrono::milliseconds(200));
     }
 
+    // go_to uses teleport — always instant and exact, pen must be off before calling
     void go_to(float x, float y)
+    {
+        auto request = std::make_shared<turtlesim::srv::TeleportAbsolute::Request>();
+        request->x = x;
+        request->y = y;
+        request->theta = current_pose_.theta;
+        teleport_client_->async_send_request(request);
+        rclcpp::sleep_for(std::chrono::milliseconds(200));
+
+        RCLCPP_INFO(this->get_logger(),
+            "go_to(%.2f, %.2f) → actual(%.2f, %.2f) error(%.3f, %.3f)",
+            x, y, current_pose_.x, current_pose_.y,
+            current_pose_.x - x, current_pose_.y - y);
+    }
+
+    // draw_to uses velocity control — this is what actually draws lines
+    void draw_to(float x, float y)
     {
         float dx = x - current_pose_.x;
         float dy = y - current_pose_.y;
@@ -147,24 +170,6 @@ class TurtleWriterNode : public rclcpp::Node
 
         turn_to(angle);
         move(distance);
-
-        // Correction pass — fix residual error
-        float ex = x - current_pose_.x;
-        float ey = y - current_pose_.y;
-        float error = std::sqrt(ex*ex + ey*ey);
-
-        if (error > 0.02) {
-            float correction_angle = std::atan2(ey, ex);
-            turn_to(correction_angle);
-            move(error);
-        }
-
-        RCLCPP_INFO(this->get_logger(),
-            "go_to(%.2f, %.2f) → actual(%.2f, %.2f) error(%.3f, %.3f)",
-            x, y,
-            current_pose_.x, current_pose_.y,
-            current_pose_.x - x,
-            current_pose_.y - y);
     }
 
     void draw_word(const std::string & name,
@@ -193,10 +198,16 @@ class TurtleWriterNode : public rclcpp::Node
                 float y   = character[i][1];
                 float pen = character[i][2];
 
-                if (pen == 1) { set_pen(true); }
-                else          { set_pen(false); }
+                float tx = origin_x + x * scale;
+                float ty = origin_y + y * scale;
 
-                go_to(origin_x + x * scale, origin_y + y * scale);
+                if (pen == 1) {
+                    set_pen(true);
+                    draw_to(tx, ty);  // velocity-based drawn stroke
+                } else {
+                    set_pen(false);
+                    go_to(tx, ty);    // teleport for pen-up repositioning
+                }
             }
 
             float space = scale * 2.5;

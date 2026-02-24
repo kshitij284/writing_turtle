@@ -1,5 +1,8 @@
 #Logs
 *.log
 
+error.txt
+
 #Build
 build/
+install/
