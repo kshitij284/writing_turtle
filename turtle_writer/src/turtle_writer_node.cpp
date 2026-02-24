@@ -67,7 +67,7 @@ class TurtleWriterNode : public rclcpp::Node
         float start_x = current_pose_.x;
         float start_y = current_pose_.y;
 
-        cmd_vel_.linear.x = 2.0;
+        cmd_vel_.linear.x = 1.0;
         cmd_vel_.angular.z = 0.0;
 
         while (true)
@@ -144,7 +144,6 @@ class TurtleWriterNode : public rclcpp::Node
         rclcpp::sleep_for(std::chrono::milliseconds(200));
     }
 
-    // go_to uses teleport — always instant and exact, pen must be off before calling
     void go_to(float x, float y)
     {
         auto request = std::make_shared<turtlesim::srv::TeleportAbsolute::Request>();
@@ -152,15 +151,18 @@ class TurtleWriterNode : public rclcpp::Node
         request->y = y;
         request->theta = current_pose_.theta;
         teleport_client_->async_send_request(request);
+
+        // Wait until pose reflects the teleport position
         rclcpp::sleep_for(std::chrono::milliseconds(200));
+        auto start = std::chrono::steady_clock::now();
+        while (std::abs(current_pose_.x - x) > 0.01 || std::abs(current_pose_.y - y) > 0.01) {
+            rclcpp::sleep_for(std::chrono::milliseconds(10));
+            if (std::chrono::steady_clock::now() - start > std::chrono::milliseconds(500)) {
+                break;
+            }
+        }
+   }
 
-        RCLCPP_INFO(this->get_logger(),
-            "go_to(%.2f, %.2f) → actual(%.2f, %.2f) error(%.3f, %.3f)",
-            x, y, current_pose_.x, current_pose_.y,
-            current_pose_.x - x, current_pose_.y - y);
-    }
-
-    // draw_to uses velocity control — this is what actually draws lines
     void draw_to(float x, float y)
     {
         float dx = x - current_pose_.x;
@@ -203,10 +205,10 @@ class TurtleWriterNode : public rclcpp::Node
 
                 if (pen == 1) {
                     set_pen(true);
-                    draw_to(tx, ty);  // velocity-based drawn stroke
+                    draw_to(tx, ty);
                 } else {
                     set_pen(false);
-                    go_to(tx, ty);    // teleport for pen-up repositioning
+                    go_to(tx, ty);
                 }
             }
 
@@ -230,8 +232,8 @@ int main(int argc, char * argv[])
     std::map<char, std::vector<std::vector<float>>> letters = {
         {'H', {{0,3,1},{0,1.5,0},{2,1.5,1},{2,3,0},{2,0,1}}},
         {'E', {{0,0,1},{2,0,1},{0,0,0},{0,3,1},{2,3,1},{0,1.5,0},{2,1.5,1}}},
-        {'L', {{0,3,1},{0,0,1},{2,0,1}}},
-        {'O', {{0,3,1},{2,3,1},{2,0,1},{0,0,1},{0,3,1}}},
+        {'L', {{0,3,1},{0,0,0},{2,0,1}}},
+        {'O', {{0,3,1},{2,3,1},{2,0,1},{0,0,1}}},
         {'I', {{0,0,0},{0,3,1}}}
     };
 
